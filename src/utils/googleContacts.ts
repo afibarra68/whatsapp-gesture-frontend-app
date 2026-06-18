@@ -75,6 +75,122 @@ function col(header: string[], name: string): number {
   return header.findIndex((h) => h.trim().toLowerCase() === name.toLowerCase());
 }
 
+function normHeader(h: string): string {
+  return h
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+}
+
+function colAlias(header: string[], aliases: string[]): number {
+  const normalized = header.map(normHeader);
+  for (const alias of aliases) {
+    const idx = normalized.indexOf(normHeader(alias));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+export type CsvImportFormat = 'simple' | 'google';
+
+export function detectCsvFormat(csvText: string): CsvImportFormat | null {
+  const rows = parseCsv(csvText);
+  if (rows.length < 1) return null;
+  const header = rows[0];
+  const hasGoogle =
+    col(header, 'First Name') >= 0 ||
+    header.some((h) => /^phone \d+ - value$/i.test(h.trim()));
+  if (hasGoogle) return 'google';
+
+  const hasNombre = colAlias(header, ['nombre', 'name']) >= 0;
+  const hasCelular = colAlias(header, ['celular', 'telefono', 'tel', 'mobile', 'phone']) >= 0;
+  if (hasNombre && hasCelular) return 'simple';
+
+  return null;
+}
+
+/** CSV simple: Nombre, Celular, categoria (la categoría se guarda como etiqueta). */
+export function parseSimpleContacts(
+  csvText: string,
+  defaultCc = '57',
+): { contacts: ParsedContact[]; descartados: number } {
+  const rows = parseCsv(csvText);
+  if (rows.length < 2) return { contacts: [], descartados: 0 };
+
+  const header = rows[0];
+  const iNombre = colAlias(header, ['nombre', 'name']);
+  const iCelular = colAlias(header, ['celular', 'telefono', 'tel', 'mobile', 'phone']);
+  const iCategoria = colAlias(header, [
+    'categoria',
+    'category',
+    'etiqueta',
+    'etiquetas',
+    'label',
+    'labels',
+  ]);
+
+  if (iNombre < 0 || iCelular < 0) {
+    return { contacts: [], descartados: 0 };
+  }
+
+  const seen = new Set<string>();
+  const contacts: ParsedContact[] = [];
+  let descartados = 0;
+
+  for (let r = 1; r < rows.length; r++) {
+    const cells = rows[r];
+    const nombre = (cells[iNombre] || '').trim();
+    const rawTel = (cells[iCelular] || '').trim();
+    if (!rawTel) {
+      descartados++;
+      continue;
+    }
+
+    const tel = normalizePhone(rawTel, defaultCc);
+    if (!tel) {
+      descartados++;
+      continue;
+    }
+    if (seen.has(tel)) continue;
+    seen.add(tel);
+
+    const etiquetas =
+      iCategoria >= 0 && cells[iCategoria]
+        ? cells[iCategoria]
+            .split(/[,;|]/)
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean)
+        : [];
+
+    contacts.push({
+      nombre: nombre || `Contacto ${tel}`,
+      telefono: tel,
+      opt_in: true,
+      etiquetas,
+    });
+  }
+
+  return { contacts, descartados };
+}
+
+/** Detecta el formato del CSV y lo parsea (simple o Google Contacts). */
+export function parseContactsCsv(
+  csvText: string,
+  defaultCc = '57',
+): { contacts: ParsedContact[]; descartados: number; format: CsvImportFormat | null } {
+  const format = detectCsvFormat(csvText);
+  if (format === 'simple') {
+    const result = parseSimpleContacts(csvText, defaultCc);
+    return { ...result, format };
+  }
+  if (format === 'google') {
+    const result = parseGoogleContacts(csvText, defaultCc);
+    return { ...result, format };
+  }
+  return { contacts: [], descartados: 0, format: null };
+}
+
 /** Convierte el contenido CSV de Google Contacts en clientes listos para /clients/bulk. */
 export function parseGoogleContacts(
   csvText: string,

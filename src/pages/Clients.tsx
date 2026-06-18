@@ -4,7 +4,7 @@ import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import type { Client, Paginated } from '../types';
-import { parseGoogleContacts, type ParsedContact } from '../utils/googleContacts';
+import { parseContactsCsv, type CsvImportFormat, type ParsedContact } from '../utils/googleContacts';
 
 export function Clients() {
   const toast = useToast();
@@ -168,11 +168,17 @@ export function Clients() {
   );
 }
 
+const FORMAT_LABELS: Record<CsvImportFormat, string> = {
+  simple: 'CSV simple (Nombre, Celular, categoria)',
+  google: 'CSV de Google Contacts',
+};
+
 function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const [defaultCc, setDefaultCc] = useState('57');
   const [contacts, setContacts] = useState<ParsedContact[]>([]);
   const [descartados, setDescartados] = useState(0);
+  const [format, setFormat] = useState<CsvImportFormat | null>(null);
   const [fileName, setFileName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -184,10 +190,21 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
     reader.onload = () => {
       try {
         const text = String(reader.result || '');
-        const { contacts: parsed, descartados: skip } = parseGoogleContacts(text, defaultCc);
+        const {
+          contacts: parsed,
+          descartados: skip,
+          format: detected,
+        } = parseContactsCsv(text, defaultCc);
         setContacts(parsed);
         setDescartados(skip);
-        if (parsed.length === 0) toast.error('No se encontraron teléfonos válidos en el archivo');
+        setFormat(detected);
+        if (!detected) {
+          toast.error(
+            'Formato no reconocido. Usa columnas Nombre,Celular,categoria o exporta desde Google Contacts.',
+          );
+        } else if (parsed.length === 0) {
+          toast.error('No se encontraron teléfonos válidos en el archivo');
+        }
       } catch {
         toast.error('No se pudo leer el archivo CSV');
       }
@@ -215,7 +232,11 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
   };
 
   return (
-    <Modal title="Importar contactos (CSV de Google Contacts)" onClose={onClose}>
+    <Modal title="Importar contactos (CSV)" onClose={onClose}>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Formatos admitidos: <code>Nombre,Celular,categoria</code> o exportación de Google Contacts.
+        La columna <code>categoria</code> se guarda como etiqueta del cliente.
+      </p>
       <div className="field">
         <label>Código de país por defecto (para móviles locales)</label>
         <input
@@ -232,6 +253,12 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
         <input type="file" accept=".csv,text/csv" onChange={onFile} />
         {fileName && <small className="muted">{fileName}</small>}
       </div>
+
+      {format && (
+        <p className="muted">
+          Formato detectado: <strong>{FORMAT_LABELS[format]}</strong>
+        </p>
+      )}
 
       {contacts.length > 0 && (
         <div className="import-preview">
