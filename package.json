@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:dev": "bash scripts/deploy.sh dev",
+    "deploy:prod": "bash scripts/deploy.sh prod"
   },
   "dependencies": {
     "react": "^18.3.1",
