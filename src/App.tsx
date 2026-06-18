@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Clients } from './pages/Clients';
 import { Templates } from './pages/Templates';
+import { TemplateMetaGuide } from './components/TemplateMetaGuide';
 import { Campaigns } from './pages/Campaigns';
 import { CampaignDetail } from './pages/CampaignDetail';
 import { Conversations } from './pages/Conversations';
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/clients" element={<Clients />} />
         <Route path="/templates" element={<Templates />} />
+        <Route path="/templates/guia" element={<TemplateMetaGuide />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/campaigns/:id" element={<CampaignDetail />} />
         <Route path="/conversations" element={<Conversations />} />

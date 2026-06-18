@@ -1,4 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
@@ -52,11 +53,19 @@ export function Templates() {
       <div className="page-head">
         <div>
           <h1>Plantillas</h1>
-          <p>Plantillas de mensaje con variables {'{{1}}'}, {'{{2}}'}… y banner opcional.</p>
+          <p>
+            Plantillas de mensaje con variables {'{{1}}'}, {'{{2}}'}… y banner opcional.{' '}
+            <Link to="/templates/guia">Ver guía paso a paso</Link>.
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={openNew}>
-          + Nueva plantilla
-        </button>
+        <div className="row">
+          <Link to="/templates/guia" className="btn">
+            Guía paso a paso
+          </Link>
+          <button className="btn btn-primary" onClick={openNew}>
+            + Nueva plantilla
+          </button>
+        </div>
       </div>
 
       <div className="table-wrap">
