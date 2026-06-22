@@ -30,14 +30,24 @@ export interface TemplateVariable {
   ejemplo?: string;
 }
 
+export interface TemplateButton {
+  tipo: 'quick_reply' | 'url' | 'phone';
+  texto: string;
+  url?: string | null;
+  telefono?: string | null;
+}
+
 export interface Template {
   _id: string;
   nombre_meta: string;
   idioma: string;
   categoria: 'marketing' | 'utility' | 'authentication';
   estado: 'borrador' | 'pendiente' | 'aprobada' | 'rechazada';
-  header_tipo?: 'none' | 'image';
+  header_tipo?: 'none' | 'image' | 'text';
   header_url?: string | null;
+  header_text?: string | null;
+  footer?: string | null;
+  botones?: TemplateButton[];
   cuerpo: string;
   variables: TemplateVariable[];
 }
