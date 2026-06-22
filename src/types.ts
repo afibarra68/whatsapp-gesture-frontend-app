@@ -85,10 +85,24 @@ export interface MessageLog {
 export interface Conversation {
   _id: string;
   telefono: string;
+  cliente_id?: string;
+  cliente_nombre?: string | null;
   modo: 'bot' | 'humano';
   ventana_abierta_hasta: string | null;
   ultimo_mensaje_entrante: string | null;
   ultima_actividad: string;
+  espera_respuesta?: boolean;
+}
+
+export interface ConversationMessage {
+  _id: string;
+  conversation_id: string;
+  direction: 'inbound' | 'outbound';
+  origen: 'cliente' | 'bot' | 'agente' | 'sistema';
+  texto: string;
+  whatsapp_message_id: string | null;
+  estado: 'enviado' | 'entregado' | 'leido' | 'fallido' | null;
+  createdAt: string;
 }
 
 export interface Paginated<T> {
