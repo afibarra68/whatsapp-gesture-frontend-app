@@ -150,19 +150,19 @@ export function Bot() {
   const [editing, setEditing] = useState<BotRule | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setLoading(true);
     try {
       setItems(await api<BotRule[]>('/bot/rules'));
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    if (user?.rol === 'admin') load();
+    if (user?.rol === 'admin') load(true);
   }, [load, user?.rol]);
 
   const openNew = () => {
