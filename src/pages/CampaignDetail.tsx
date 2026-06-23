@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge } from '../components/Badge';
 import { useToast } from '../components/Toast';
-import type { Campaign, MessageLog, Paginated } from '../types';
+import type { Campaign, CampaignPlanEnvio, MessageLog, Paginated } from '../types';
 
 interface Preview {
   total_destinatarios: number;
+  plan_envio?: CampaignPlanEnvio;
   banner?: string | null;
   ejemplo?: { texto: string } | null;
 }
 
 export function CampaignDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const toast = useToast();
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -61,6 +63,31 @@ export function CampaignDetail() {
     }
   };
 
+  const remove = async () => {
+    if (!id || !campaign) return;
+    if (campaign.estado === 'en_progreso') {
+      toast.error('Pausa la campaña antes de eliminarla');
+      return;
+    }
+    if (
+      !confirm(
+        `¿Eliminar la campaña "${campaign.nombre_campana}"? Se borrarán también sus registros de mensajes.`,
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    try {
+      await api(`/campaigns/${id}`, { method: 'DELETE' });
+      toast.success('Campaña eliminada');
+      navigate('/campaigns');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!campaign) return <div className="empty">Cargando campaña…</div>;
 
   const m = campaign.metricas;
@@ -78,7 +105,7 @@ export function CampaignDetail() {
             Estado: <Badge value={campaign.estado} />
           </p>
         </div>
-        <div className="row">
+        <div className="head-actions">
           {campaign.estado === 'borrador' && (
             <button className="btn btn-primary" disabled={busy} onClick={() => action('launch')}>
               ➤ Lanzar campaña
@@ -94,6 +121,18 @@ export function CampaignDetail() {
               ▶ Reanudar
             </button>
           )}
+          <button
+            className="btn btn-danger"
+            disabled={busy || campaign.estado === 'en_progreso'}
+            title={
+              campaign.estado === 'en_progreso'
+                ? 'Pausa la campaña antes de eliminar'
+                : undefined
+            }
+            onClick={remove}
+          >
+            Eliminar
+          </button>
         </div>
       </div>
 
@@ -103,6 +142,21 @@ export function CampaignDetail() {
           <p>
             Destinatarios estimados: <b>{preview.total_destinatarios}</b>
           </p>
+          {preview.plan_envio && preview.total_destinatarios > 0 && (
+            <div className="muted" style={{ marginBottom: 12 }}>
+              <p>
+                Plan de envío: <b>{preview.plan_envio.tope_diario}</b> mensajes/día durante{' '}
+                <b>{preview.plan_envio.dias_estimados}</b> día
+                {preview.plan_envio.dias_estimados !== 1 ? 's' : ''}
+                {preview.plan_envio.dias_estimados > 1 && (
+                  <>
+                    {' '}
+                    (último día: <b>{preview.plan_envio.mensajes_ultimo_dia}</b>)
+                  </>
+                )}
+              </p>
+            </div>
+          )}
           {preview.banner && (
             <img
               src={preview.banner}
@@ -124,9 +178,38 @@ export function CampaignDetail() {
         </div>
       )}
 
+      {campaign.config_envio?.tope_diario && campaign.estado !== 'borrador' && (
+        <div className="card">
+          <h3>Dosificación</h3>
+          <p className="muted">
+            Tope diario: <b>{campaign.config_envio.tope_diario}</b> · Activados hoy:{' '}
+            <b>{campaign.config_envio.enviados_en_ventana ?? 0}</b>
+            {campaign.metricas.pendientes != null && campaign.metricas.pendientes > 0 && (
+              <>
+                {' '}
+                · Pendientes de liberar: <b>{campaign.metricas.pendientes}</b>
+              </>
+            )}
+            {(campaign.config_envio.intervalo_min_seg != null ||
+              campaign.config_envio.intervalo_max_seg != null) && (
+              <>
+                <br />
+                Intervalo entre mensajes:{' '}
+                <b>
+                  {campaign.config_envio.intervalo_min_seg ?? 1}–
+                  {campaign.config_envio.intervalo_max_seg ?? 10} s
+                </b>{' '}
+                (aleatorio)
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       <div className="cards">
         {[
           ['Total', m.total],
+          ...(m.pendientes != null && m.pendientes > 0 ? [['Pendientes', m.pendientes] as const] : []),
           ['Enviados', m.enviados],
           ['Entregados', m.entregados],
           ['Leídos', m.leidos],

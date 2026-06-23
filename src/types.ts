@@ -90,6 +90,24 @@ export interface CampaignMetrics {
   entregados: number;
   leidos: number;
   fallidos: number;
+  pendientes?: number;
+}
+
+export interface CampaignPlanEnvio {
+  tope_diario: number;
+  dias_estimados: number;
+  total: number;
+  mensajes_ultimo_dia: number;
+}
+
+export interface CampaignConfigEnvio {
+  tope_diario?: number;
+  dias_planificados?: number;
+  dias_estimados?: number;
+  ventana_inicio?: string | null;
+  enviados_en_ventana?: number;
+  intervalo_min_seg?: number;
+  intervalo_max_seg?: number;
 }
 
 export interface Campaign {
@@ -98,6 +116,7 @@ export interface Campaign {
   plantilla_id: string;
   segmento: { etiquetas?: string[]; solo_activos?: boolean };
   mapeo_variables: { indice: number; origen: 'campo' | 'fijo' | 'metadata'; valor: string }[];
+  config_envio?: CampaignConfigEnvio | null;
   estado: 'borrador' | 'en_progreso' | 'pausada' | 'finalizada' | 'error';
   metricas: CampaignMetrics;
   fecha_lanzamiento?: string | null;
@@ -188,6 +207,15 @@ export interface PersonasConfig {
   categoria_pendientes_slug: string;
   sync_to_clients: boolean;
   updated_at: string;
+}
+
+export interface PersonaImportResult {
+  insertados: number;
+  actualizados: number;
+  pagosCreados: number;
+  descartados: number;
+  filas_procesadas: number;
+  format: string;
 }
 
 export type PagoEstado = 'pendiente' | 'pagado' | 'cancelado';
