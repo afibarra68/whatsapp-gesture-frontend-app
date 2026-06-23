@@ -1,20 +1,12 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { EVENT } from '../config';
-
-const NAV = [
-  { to: '/', label: 'Dashboard', icon: '◧', end: true },
-  { to: '/clients', label: 'Clientes', icon: '◷' },
-  { to: '/templates', label: 'Plantillas', icon: '▦' },
-  { to: '/campaigns', label: 'Campañas', icon: '➤' },
-  { to: '/conversations', label: 'Conversaciones', icon: '✉' },
-  { to: '/simulator', label: 'Simulador', icon: '⚙' },
-  { to: '/help', label: 'Guía de uso', icon: '?' },
-];
+import { navItemsForRole } from '../navigation';
 
 export function Layout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const navItems = navItemsForRole(user?.rol);
 
   const handleLogout = () => {
     logout();
@@ -28,15 +20,15 @@ export function Layout() {
           <span className="dot">{EVENT.short}</span> {EVENT.name}
         </div>
         <nav>
-          {NAV.map((n) => (
+          {navItems.map(({ to, label, icon, end }) => (
             <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
             >
-              <span style={{ width: 18, textAlign: 'center' }}>{n.icon}</span>
-              {n.label}
+              <span className="nav-icon">{icon}</span>
+              {label}
             </NavLink>
           ))}
         </nav>
@@ -45,7 +37,7 @@ export function Layout() {
             <b>{user?.nombre}</b>
             {user?.email} · {user?.rol}
           </div>
-          <button className="btn btn-block btn-sm" onClick={handleLogout}>
+          <button type="button" className="btn btn-block btn-sm" onClick={handleLogout}>
             Cerrar sesión
           </button>
         </div>

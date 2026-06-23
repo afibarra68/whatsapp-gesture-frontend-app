@@ -169,7 +169,7 @@ export function Conversations() {
               </p>
             ) : items.length === 0 ? (
               <p className="muted" style={{ padding: 16 }}>
-                Sin conversaciones. Usa el Simulador o espera respuestas de clientes.
+                Sin conversaciones. Espera respuestas de clientes o revisa campañas activas.
               </p>
             ) : (
               items.map((c) => (

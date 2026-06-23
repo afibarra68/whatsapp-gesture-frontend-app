@@ -73,6 +73,27 @@ button {
   color: #06281a;
   font-weight: 900;
 }
+.login-tagline {
+  margin-top: -12px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+.login-config-error {
+  background: rgba(248, 81, 73, 0.12);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.login-config-error ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.login-config-error li {
+  margin-bottom: 4px;
+}
 
 /* ===== Layout ===== */
 .app-shell {
@@ -104,6 +125,10 @@ button {
   place-items: center;
   color: #06281a;
   font-weight: 900;
+}
+.nav-icon {
+  width: 18px;
+  text-align: center;
 }
 .nav-link {
   display: flex;

@@ -21,6 +21,11 @@ const COLORS: Record<string, string> = {
   // booleanos
   activo: 'badge-green',
   inactivo: 'badge-gray',
+  aprobado: 'badge-green',
+  rechazado: 'badge-red',
+  admin: 'badge-blue',
+  operador: 'badge-yellow',
+  agente: 'badge-gray',
 };
 
 export function Badge({ value }: { value: string }) {
