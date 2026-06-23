@@ -5,7 +5,7 @@ import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { useAuth } from '../auth/AuthContext';
-import type { BotRule } from '../types';
+import type { BotRule, BotConfig } from '../types';
 
 const SYSTEM_MESSAGES = [
   {
@@ -142,6 +142,87 @@ function RuleFormModal({
   );
 }
 
+function CloseConfigCard() {
+  const toast = useToast();
+  const [mensaje, setMensaje] = useState('');
+  const [enviar, setEnviar] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api<BotConfig>('/bot/config')
+      .then((c) => {
+        setMensaje(c.mensaje_cierre);
+        setEnviar(c.enviar_mensaje_cierre);
+      })
+      .catch((err) => toast.error((err as Error).message))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!mensaje.trim()) {
+      toast.error('Escribe el mensaje de cierre');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api('/bot/config', {
+        method: 'PATCH',
+        body: { mensaje_cierre: mensaje.trim(), enviar_mensaje_cierre: enviar },
+      });
+      toast.success('Configuración de cierre guardada');
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="card" style={{ marginBottom: 16 }}>
+        <p className="muted">Cargando configuración de cierre…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <h3>Finalizar conversación (chat)</h3>
+      <p className="muted" style={{ marginBottom: 12 }}>
+        Cuando un agente finaliza una conversación en <b>Conversaciones</b>, el cliente vuelve a modo bot
+        y puede recibir este mensaje de despedida (si la ventana de 24h está abierta).
+      </p>
+      <form onSubmit={save}>
+        <div className="field">
+          <label>Mensaje de cierre</label>
+          <textarea
+            rows={3}
+            value={mensaje}
+            onChange={(e) => setMensaje(e.target.value)}
+            placeholder="Gracias por contactarnos…"
+          />
+        </div>
+        <div className="field">
+          <label>
+            <input
+              type="checkbox"
+              checked={enviar}
+              onChange={(e) => setEnviar(e.target.checked)}
+              style={{ marginRight: 8 }}
+            />
+            Enviar mensaje al cliente al finalizar
+          </label>
+        </div>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? 'Guardando…' : 'Guardar configuración'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export function Bot() {
   const toast = useToast();
   const { user } = useAuth();
@@ -231,6 +312,8 @@ export function Bot() {
           </button>
         </div>
       </div>
+
+      <CloseConfigCard />
 
       <div className="card" style={{ marginBottom: 16 }}>
         <h3>Mensajes del sistema (fijos)</h3>

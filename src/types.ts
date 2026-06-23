@@ -148,6 +148,11 @@ export interface BotRule {
   updatedAt: string;
 }
 
+export interface BotConfig {
+  mensaje_cierre: string;
+  enviar_mensaje_cierre: boolean;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;

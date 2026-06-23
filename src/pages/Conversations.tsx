@@ -119,6 +119,19 @@ export function Conversations() {
     }
   };
 
+  const finalize = async () => {
+    if (!selected) return;
+    if (!confirm('¿Finalizar esta conversación? El cliente volverá a modo bot.')) return;
+    try {
+      await api(`/conversations/${selected._id}/close`, { method: 'POST', body: {} });
+      toast.success('Conversación finalizada');
+      await loadMessages(selected._id, true);
+      await loadList();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
+  };
+
   const sendReply = async (e: FormEvent) => {
     e.preventDefault();
     if (!selected || !texto.trim()) return;
@@ -216,6 +229,11 @@ export function Conversations() {
                   {selected.modo === 'bot' && (
                     <button type="button" className="btn btn-sm" onClick={handoff}>
                       A humano
+                    </button>
+                  )}
+                  {selected.modo === 'humano' && (
+                    <button type="button" className="btn btn-sm btn-danger" onClick={finalize}>
+                      Finalizar
                     </button>
                   )}
                 </div>
