@@ -82,7 +82,7 @@ export function Templates() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && items.length === 0 ? (
               <tr>
                 <td colSpan={7} className="empty">
                   Cargando…
@@ -99,6 +99,8 @@ export function Templates() {
                         alt="banner"
                         style={{ height: 34, borderRadius: 6, border: '1px solid var(--border)' }}
                       />
+                    ) : t.header_tipo === 'text' ? (
+                      <span className="muted">{t.header_text || 'Texto (Meta)'}</span>
                     ) : (
                       <span className="muted">—</span>
                     )}
@@ -162,32 +164,44 @@ function TemplateModal({
   const [idioma, setIdioma] = useState(template?.idioma ?? 'es');
   const [categoria, setCategoria] = useState(template?.categoria ?? 'marketing');
   const [estado, setEstado] = useState(template?.estado ?? 'borrador');
-  const [headerTipo, setHeaderTipo] = useState<'none' | 'image'>(template?.header_tipo ?? 'none');
+  const normalizeHeaderTipo = (value?: string): 'none' | 'text' | 'image' => {
+    if (value === 'text' || value === 'image') return value;
+    return 'none';
+  };
+
+  const [headerTipo, setHeaderTipo] = useState<'none' | 'text' | 'image'>(
+    normalizeHeaderTipo(template?.header_tipo),
+  );
   const [headerUrl, setHeaderUrl] = useState(template?.header_url ?? '');
+  const [headerText, setHeaderText] = useState(template?.header_text ?? '');
   const [cuerpo, setCuerpo] = useState(
     template?.cuerpo ??
       'Gracias por participar. A continuación encontrarás el detalle del evento.',
   );
   const [saving, setSaving] = useState(false);
 
-  const matches = Array.from(new Set((cuerpo.match(/\{\{(\d+)\}\}/g) || []))).length;
+  const variableIndices = Array.from(
+    new Set([...(cuerpo.matchAll(/\{\{(\d+)\}\}/g))].map((m) => Number.parseInt(m[1], 10))),
+  ).sort((a, b) => a - b);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (headerTipo === 'image' && !headerUrl) {
+    const trimmedHeaderUrl = headerUrl.trim();
+    if (headerTipo === 'image' && !trimmedHeaderUrl) {
       toast.error('Indica la URL de la imagen del banner');
       return;
     }
     setSaving(true);
     try {
-      const variables = Array.from({ length: matches }).map((_, i) => ({
-        indice: i + 1,
-        nombre: template?.variables?.[i]?.nombre ?? `var${i + 1}`,
+      const variables = variableIndices.map((indice, i) => ({
+        indice,
+        nombre: template?.variables?.[i]?.nombre ?? `var${indice}`,
       }));
       const payload = {
         categoria,
         header_tipo: headerTipo,
-        header_url: headerTipo === 'image' ? headerUrl : null,
+        header_url: headerTipo === 'image' ? trimmedHeaderUrl : null,
+        header_text: headerTipo === 'text' ? headerText.trim() || null : null,
         cuerpo,
         variables,
       };
@@ -257,12 +271,26 @@ function TemplateModal({
           <label>Encabezado / Banner</label>
           <select
             value={headerTipo}
-            onChange={(e) => setHeaderTipo(e.target.value as 'none' | 'image')}
+            onChange={(e) => setHeaderTipo(e.target.value as 'none' | 'text' | 'image')}
           >
-            <option value="none">Sin imagen (solo texto)</option>
+            <option value="none">Sin encabezado</option>
+            <option value="text">Texto (fijo en Meta)</option>
             <option value="image">Imagen (banner)</option>
           </select>
         </div>
+        {headerTipo === 'text' && (
+          <div className="field">
+            <label>Texto del encabezado (referencia local, opcional)</label>
+            <input
+              value={headerText}
+              onChange={(e) => setHeaderText(e.target.value)}
+              placeholder="Ej.: Invitación especial"
+            />
+            <small className="muted">
+              El texto real lo define la plantilla aprobada en Meta. Aquí solo es referencia para el panel.
+            </small>
+          </div>
+        )}
         {headerTipo === 'image' && (
           <div className="field">
             <label>URL pública de la imagen del banner</label>
@@ -295,8 +323,8 @@ function TemplateModal({
           </label>
           <textarea value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} required />
           <small className="muted">
-            {matches > 0
-              ? `Variables detectadas: ${matches}`
+            {variableIndices.length > 0
+              ? `Variables detectadas: ${variableIndices.length}`
               : 'Sin variables — mensaje fijo para todos los destinatarios'}
           </small>
         </div>

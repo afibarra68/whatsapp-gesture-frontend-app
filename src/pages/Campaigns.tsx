@@ -98,7 +98,7 @@ export function Campaigns() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && !data ? (
               <tr>
                 <td colSpan={7} className="empty">
                   Cargando…

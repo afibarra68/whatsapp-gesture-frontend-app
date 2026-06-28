@@ -81,7 +81,7 @@ export function Conversations() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && items.length === 0 ? (
               <tr>
                 <td colSpan={5} className="empty">
                   Cargando…

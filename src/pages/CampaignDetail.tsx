@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -9,6 +9,7 @@ import type { Campaign, CampaignReport, CampaignSettings, MessageLog, Paginated 
 
 const LOGS_LIMIT_DEFAULT = 100;
 const LOGS_LIMIT_OPTIONS = [50, 100, 200, 500];
+const POLL_MS = 3000;
 
 interface Preview {
   total_destinatarios: number;
@@ -29,71 +30,105 @@ export function CampaignDetail() {
   const [logsData, setLogsData] = useState<Paginated<MessageLog> | null>(null);
   const [logsPage, setLogsPage] = useState(1);
   const [logsLimit, setLogsLimit] = useState(LOGS_LIMIT_DEFAULT);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [logsInitialLoading, setLogsInitialLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testPhone, setTestPhone] = useState('');
 
-  const loadCampaign = useCallback(async () => {
-    if (!id) return;
-    try {
-      const [camp, reportRes] = await Promise.all([
-        api<Campaign>(`/campaigns/${id}`),
-        api<CampaignReport>(`/campaigns/${id}/report`),
-      ]);
-      setCampaign(camp);
-      setReport(reportRes);
-      if (camp.estado === 'borrador') {
-        api<Preview>(`/campaigns/${id}/preview`).then(setPreview).catch(() => {});
-      }
-      if (isAdmin) {
-        api<CampaignSettings>('/campaigns/settings').then(setSettings).catch(() => {});
-      }
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  }, [id, isAdmin, toast]);
+  const campaignLoadedRef = useRef(false);
+  const logsLoadedRef = useRef(false);
 
-  const loadLogs = useCallback(async () => {
-    if (!id) return;
-    setLogsLoading(true);
-    try {
-      const qs = new URLSearchParams({
-        page: String(logsPage),
-        limit: String(logsLimit),
-      });
-      const res = await api<Paginated<MessageLog>>(`/campaigns/${id}/logs?${qs.toString()}`);
-      const pages = Math.max(1, Math.ceil(res.total / res.limit));
-      if (logsPage > pages) {
-        setLogsPage(pages);
-        return;
+  const loadCampaign = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!id) return;
+      const silent = opts?.silent ?? false;
+      if (!silent && !campaignLoadedRef.current) setInitialLoading(true);
+      if (silent) setRefreshing(true);
+      try {
+        const [camp, reportRes] = await Promise.all([
+          api<Campaign>(`/campaigns/${id}`),
+          api<CampaignReport>(`/campaigns/${id}/report`),
+        ]);
+        setCampaign(camp);
+        setReport(reportRes);
+        campaignLoadedRef.current = true;
+        if (camp.estado === 'borrador') {
+          api<Preview>(`/campaigns/${id}/preview`).then(setPreview).catch(() => {});
+        }
+        if (isAdmin) {
+          api<CampaignSettings>('/campaigns/settings').then(setSettings).catch(() => {});
+        }
+      } catch (err) {
+        if (!silent) toast.error((err as Error).message);
+      } finally {
+        setInitialLoading(false);
+        if (silent) setRefreshing(false);
       }
-      setLogsData(res);
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setLogsLoading(false);
-    }
-  }, [id, logsPage, logsLimit, toast]);
+    },
+    [id, isAdmin, toast],
+  );
 
-  const refresh = useCallback(async () => {
-    await Promise.all([loadCampaign(), loadLogs()]);
-  }, [loadCampaign, loadLogs]);
+  const loadLogs = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      if (!id) return;
+      const silent = opts?.silent ?? false;
+      if (!silent && !logsLoadedRef.current) setLogsInitialLoading(true);
+      if (silent) setRefreshing(true);
+      try {
+        const qs = new URLSearchParams({
+          page: String(logsPage),
+          limit: String(logsLimit),
+        });
+        const res = await api<Paginated<MessageLog>>(`/campaigns/${id}/logs?${qs.toString()}`);
+        const pages = Math.max(1, Math.ceil(res.total / res.limit));
+        if (logsPage > pages) {
+          setLogsPage(pages);
+          return;
+        }
+        setLogsData(res);
+        logsLoadedRef.current = true;
+      } catch (err) {
+        if (!silent) toast.error((err as Error).message);
+      } finally {
+        setLogsInitialLoading(false);
+        if (silent) setRefreshing(false);
+      }
+    },
+    [id, logsPage, logsLimit, toast],
+  );
+
+  const refresh = useCallback(
+    async (silent = true) => {
+      await Promise.all([loadCampaign({ silent }), loadLogs({ silent })]);
+    },
+    [loadCampaign, loadLogs],
+  );
 
   useEffect(() => {
-    loadCampaign();
-  }, [loadCampaign]);
-
-  useEffect(() => {
+    campaignLoadedRef.current = false;
+    logsLoadedRef.current = false;
+    setInitialLoading(true);
+    setLogsInitialLoading(true);
+    setCampaign(null);
+    setLogsData(null);
     setLogsPage(1);
+    setPreview(null);
   }, [id]);
 
   useEffect(() => {
-    loadLogs();
-  }, [loadLogs]);
+    if (!id) return;
+    loadCampaign({ silent: campaignLoadedRef.current });
+  }, [id, isAdmin, loadCampaign]);
+
+  useEffect(() => {
+    if (!id) return;
+    loadLogs({ silent: logsLoadedRef.current });
+  }, [id, logsPage, logsLimit, loadLogs]);
 
   useEffect(() => {
     if (campaign?.estado !== 'en_progreso') return;
-    const t = setInterval(refresh, 2000);
+    const t = setInterval(() => refresh(true), POLL_MS);
     return () => clearInterval(t);
   }, [campaign?.estado, refresh]);
 
@@ -103,7 +138,7 @@ export function CampaignDetail() {
     try {
       await api(`/campaigns/${id}/${verb}`, { method: 'POST' });
       toast.success(`Acción "${verb}" ejecutada`);
-      refresh();
+      await refresh(false);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -120,7 +155,7 @@ export function CampaignDetail() {
         body: {},
       });
       toast.success(`Liberados ${res.procesados} mensajes · ${res.pendientes} pendientes`);
-      refresh();
+      await refresh(true);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -152,7 +187,12 @@ export function CampaignDetail() {
     try {
       const updated = await api<CampaignSettings>('/campaigns/settings', {
         method: 'PATCH',
-        body: settings,
+        body: {
+          send_rate_per_second: settings.send_rate_per_second,
+          release_batch_size: settings.release_batch_size,
+          product_policy: settings.product_policy,
+          message_activity_sharing: settings.message_activity_sharing,
+        },
       });
       setSettings(updated);
       toast.success('Configuración guardada');
@@ -163,7 +203,13 @@ export function CampaignDetail() {
     }
   };
 
-  if (!campaign) return <div className="empty">Cargando campaña…</div>;
+  if (initialLoading && !campaign) {
+    return <div className="empty">Cargando campaña…</div>;
+  }
+
+  if (!campaign) {
+    return <div className="empty">No se pudo cargar la campaña.</div>;
+  }
 
   const m = campaign.metricas;
   const pct = (n: number) => (m.total > 0 ? Math.round((n / m.total) * 100) : 0);
@@ -180,6 +226,7 @@ export function CampaignDetail() {
           <h1 style={{ marginTop: 6 }}>{campaign.nombre_campana}</h1>
           <p>
             Estado: <Badge value={campaign.estado} />
+            {refreshing && <span className="refresh-indicator"> · actualizando…</span>}
             {pendientes > 0 && (
               <span className="muted" style={{ marginLeft: 10 }}>
                 · {pendientes} encolados
@@ -343,7 +390,7 @@ export function CampaignDetail() {
         </div>
       )}
 
-      <div className="cards">
+      <div className={`cards${refreshing ? ' table-refreshing' : ''}`}>
         {[
           ['Total', m.total],
           ['Enviados', m.enviados],
@@ -378,7 +425,7 @@ export function CampaignDetail() {
             limitOptions={LOGS_LIMIT_OPTIONS}
           />
         )}
-        <div className="table-wrap">
+        <div className={`table-wrap${refreshing ? ' table-refreshing' : ''}`}>
           <table>
             <thead>
               <tr>
@@ -390,7 +437,7 @@ export function CampaignDetail() {
               </tr>
             </thead>
             <tbody>
-              {logsLoading ? (
+              {logsInitialLoading && !logsData ? (
                 <tr>
                   <td colSpan={5} className="empty">
                     Cargando…

@@ -98,7 +98,7 @@ export function Clients() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
+            {loading && !data ? (
               <tr>
                 <td colSpan={6} className="empty">
                   Cargando…

@@ -504,3 +504,24 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+.table-refreshing {
+  opacity: 0.72;
+  transition: opacity 0.2s ease;
+}
+
+.refresh-indicator {
+  font-size: 12px;
+  color: var(--text-dim);
+  animation: pulse-dim 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse-dim {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
