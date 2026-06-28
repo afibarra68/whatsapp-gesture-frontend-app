@@ -355,6 +355,9 @@ textarea {
   overflow-y: auto;
   box-shadow: var(--shadow);
 }
+.modal-wide {
+  max-width: 920px;
+}
 .modal h3 {
   margin: 0 0 18px;
 }
