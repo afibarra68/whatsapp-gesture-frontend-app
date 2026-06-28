@@ -448,6 +448,13 @@ textarea {
   width: auto;
   min-width: 160px;
 }
+.pagination {
+  margin-bottom: 12px;
+}
+.pagination:last-child {
+  margin-bottom: 0;
+  margin-top: 12px;
+}
 .spacer {
   flex: 1;
 }

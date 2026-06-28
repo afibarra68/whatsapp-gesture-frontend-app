@@ -3,30 +3,51 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Modal } from '../components/Modal';
+import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
 import type { Campaign, Paginated, Template } from '../types';
+
+const CAMPAIGNS_LIMIT_DEFAULT = 20;
 
 export function Campaigns() {
   const toast = useToast();
   const navigate = useNavigate();
   const [data, setData] = useState<Paginated<Campaign> | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(CAMPAIGNS_LIMIT_DEFAULT);
+  const [estado, setEstado] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      setData(await api<Paginated<Campaign>>('/campaigns?limit=50'));
+      const qs = new URLSearchParams({
+        page: String(page),
+        limit: String(limit),
+      });
+      if (estado) qs.set('estado', estado);
+      const res = await api<Paginated<Campaign>>(`/campaigns?${qs.toString()}`);
+      const pages = Math.max(1, Math.ceil(res.total / res.limit));
+      if (page > pages) {
+        setPage(pages);
+        return;
+      }
+      setData(res);
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [page, limit, estado, toast]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [estado, limit]);
 
   return (
     <div>
@@ -39,6 +60,29 @@ export function Campaigns() {
           + Nueva campaña
         </button>
       </div>
+
+      <div className="toolbar">
+        <select value={estado} onChange={(e) => setEstado(e.target.value)} aria-label="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="borrador">Borrador</option>
+          <option value="en_progreso">En progreso</option>
+          <option value="pausada">Pausada</option>
+          <option value="finalizada">Finalizada</option>
+        </select>
+        <div className="spacer" />
+        <span className="muted">{data?.total ?? 0} campañas</span>
+      </div>
+
+      {(data?.total ?? 0) > 0 && (
+        <Pagination
+          page={page}
+          limit={limit}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+          limitOptions={[10, 20, 50, 100]}
+        />
+      )}
 
       <div className="table-wrap">
         <table>
@@ -86,6 +130,17 @@ export function Campaigns() {
           </tbody>
         </table>
       </div>
+
+      {(data?.total ?? 0) > 0 && (
+        <Pagination
+          page={page}
+          limit={limit}
+          total={data?.total ?? 0}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+          limitOptions={[10, 20, 50, 100]}
+        />
+      )}
 
       {showModal && (
         <NewCampaignModal
@@ -178,7 +233,8 @@ function NewCampaignModal({
             <option value="">Selecciona…</option>
             {templates.map((t) => (
               <option key={t._id} value={t._id}>
-                {t.nombre_meta} ({t.variables?.length ?? 0} vars)
+                {t.nombre_meta}
+                {(t.variables?.length ?? 0) > 0 ? ` (${t.variables.length} vars)` : ' (sin variables)'}
               </option>
             ))}
           </select>
@@ -192,7 +248,7 @@ function NewCampaignModal({
           />
         </div>
 
-        {mapeo.length > 0 && (
+        {mapeo.length > 0 ? (
           <div className="field">
             <label>Mapeo de variables</label>
             {mapeo.map((m, i) => (
@@ -216,6 +272,12 @@ function NewCampaignModal({
               </div>
             ))}
           </div>
+        ) : (
+          templateId && (
+            <p className="muted">
+              Esta plantilla no usa variables — el mismo mensaje se enviará a todos los destinatarios.
+            </p>
+          )
         )}
 
         <div className="modal-actions">

@@ -3,8 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Badge } from '../components/Badge';
+import { Pagination } from '../components/Pagination';
 import { useToast } from '../components/Toast';
 import type { Campaign, CampaignReport, CampaignSettings, MessageLog, Paginated } from '../types';
+
+const LOGS_LIMIT_DEFAULT = 100;
+const LOGS_LIMIT_OPTIONS = [50, 100, 200, 500];
 
 interface Preview {
   total_destinatarios: number;
@@ -22,20 +26,21 @@ export function CampaignDetail() {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [report, setReport] = useState<CampaignReport | null>(null);
   const [settings, setSettings] = useState<CampaignSettings | null>(null);
-  const [logs, setLogs] = useState<MessageLog[]>([]);
+  const [logsData, setLogsData] = useState<Paginated<MessageLog> | null>(null);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsLimit, setLogsLimit] = useState(LOGS_LIMIT_DEFAULT);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [testPhone, setTestPhone] = useState('');
 
-  const load = useCallback(async () => {
+  const loadCampaign = useCallback(async () => {
     if (!id) return;
     try {
-      const [camp, logsRes, reportRes] = await Promise.all([
+      const [camp, reportRes] = await Promise.all([
         api<Campaign>(`/campaigns/${id}`),
-        api<Paginated<MessageLog>>(`/campaigns/${id}/logs?limit=200`),
         api<CampaignReport>(`/campaigns/${id}/report`),
       ]);
       setCampaign(camp);
-      setLogs(logsRes.items);
       setReport(reportRes);
       if (camp.estado === 'borrador') {
         api<Preview>(`/campaigns/${id}/preview`).then(setPreview).catch(() => {});
@@ -48,15 +53,49 @@ export function CampaignDetail() {
     }
   }, [id, isAdmin, toast]);
 
+  const loadLogs = useCallback(async () => {
+    if (!id) return;
+    setLogsLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        page: String(logsPage),
+        limit: String(logsLimit),
+      });
+      const res = await api<Paginated<MessageLog>>(`/campaigns/${id}/logs?${qs.toString()}`);
+      const pages = Math.max(1, Math.ceil(res.total / res.limit));
+      if (logsPage > pages) {
+        setLogsPage(pages);
+        return;
+      }
+      setLogsData(res);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLogsLoading(false);
+    }
+  }, [id, logsPage, logsLimit, toast]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([loadCampaign(), loadLogs()]);
+  }, [loadCampaign, loadLogs]);
+
   useEffect(() => {
-    load();
-  }, [load]);
+    loadCampaign();
+  }, [loadCampaign]);
+
+  useEffect(() => {
+    setLogsPage(1);
+  }, [id]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   useEffect(() => {
     if (campaign?.estado !== 'en_progreso') return;
-    const t = setInterval(load, 2000);
+    const t = setInterval(refresh, 2000);
     return () => clearInterval(t);
-  }, [campaign?.estado, load]);
+  }, [campaign?.estado, refresh]);
 
   const action = async (verb: 'launch' | 'pause' | 'resume') => {
     if (!id) return;
@@ -64,7 +103,7 @@ export function CampaignDetail() {
     try {
       await api(`/campaigns/${id}/${verb}`, { method: 'POST' });
       toast.success(`Acción "${verb}" ejecutada`);
-      load();
+      refresh();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -81,7 +120,7 @@ export function CampaignDetail() {
         body: {},
       });
       toast.success(`Liberados ${res.procesados} mensajes · ${res.pendientes} pendientes`);
-      load();
+      refresh();
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -325,7 +364,20 @@ export function CampaignDetail() {
       </div>
 
       <div className="card">
-        <h3>Registro de mensajes ({logs.length})</h3>
+        <h3>Registro de mensajes ({logsData?.total ?? 0})</h3>
+        {(logsData?.total ?? 0) > 0 && (
+          <Pagination
+            page={logsPage}
+            limit={logsLimit}
+            total={logsData?.total ?? 0}
+            onPageChange={setLogsPage}
+            onLimitChange={(limit) => {
+              setLogsLimit(limit);
+              setLogsPage(1);
+            }}
+            limitOptions={LOGS_LIMIT_OPTIONS}
+          />
+        )}
         <div className="table-wrap">
           <table>
             <thead>
@@ -338,8 +390,14 @@ export function CampaignDetail() {
               </tr>
             </thead>
             <tbody>
-              {logs.length > 0 ? (
-                logs.map((l) => (
+              {logsLoading ? (
+                <tr>
+                  <td colSpan={5} className="empty">
+                    Cargando…
+                  </td>
+                </tr>
+              ) : logsData && logsData.items.length > 0 ? (
+                logsData.items.map((l) => (
                   <tr key={l._id}>
                     <td className="mono">{l.telefono}</td>
                     <td>
@@ -360,6 +418,19 @@ export function CampaignDetail() {
             </tbody>
           </table>
         </div>
+        {(logsData?.total ?? 0) > 0 && (
+          <Pagination
+            page={logsPage}
+            limit={logsLimit}
+            total={logsData?.total ?? 0}
+            onPageChange={setLogsPage}
+            onLimitChange={(limit) => {
+              setLogsLimit(limit);
+              setLogsPage(1);
+            }}
+            limitOptions={LOGS_LIMIT_OPTIONS}
+          />
+        )}
       </div>
     </div>
   );

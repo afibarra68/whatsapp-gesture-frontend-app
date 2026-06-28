@@ -166,7 +166,7 @@ function TemplateModal({
   const [headerUrl, setHeaderUrl] = useState(template?.header_url ?? '');
   const [cuerpo, setCuerpo] = useState(
     template?.cuerpo ??
-      'Gracias por participar {{1}}. A continuación encontrarás el detalle del evento.',
+      'Gracias por participar. A continuación encontrarás el detalle del evento.',
   );
   const [saving, setSaving] = useState(false);
 
@@ -287,9 +287,18 @@ function TemplateModal({
         )}
 
         <div className="field">
-          <label>Cuerpo (usa {'{{1}}'}, {'{{2}}'}…)</label>
+          <label>
+            Cuerpo
+            {categoria === 'marketing'
+              ? ' (variables {{1}}, {{2}}… opcionales)'
+              : ' (usa {{1}}, {{2}}… si necesitas personalizar)'}
+          </label>
           <textarea value={cuerpo} onChange={(e) => setCuerpo(e.target.value)} required />
-          <small className="muted">Variables detectadas: {matches}</small>
+          <small className="muted">
+            {matches > 0
+              ? `Variables detectadas: ${matches}`
+              : 'Sin variables — mensaje fijo para todos los destinatarios'}
+          </small>
         </div>
 
         <div className="modal-actions">
