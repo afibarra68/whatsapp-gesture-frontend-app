@@ -1,48 +1,57 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { Badge } from '../components/Badge';
 import { useToast } from '../components/Toast';
-import type { Campaign, CampaignPlanEnvio, MessageLog, Paginated } from '../types';
+import type { Campaign, CampaignReport, CampaignSettings, MessageLog, Paginated } from '../types';
 
 interface Preview {
   total_destinatarios: number;
-  plan_envio?: CampaignPlanEnvio;
   banner?: string | null;
   ejemplo?: { texto: string } | null;
 }
 
 export function CampaignDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const toast = useToast();
+  const isAdmin = user?.rol === 'admin';
+
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [report, setReport] = useState<CampaignReport | null>(null);
+  const [settings, setSettings] = useState<CampaignSettings | null>(null);
   const [logs, setLogs] = useState<MessageLog[]>([]);
   const [busy, setBusy] = useState(false);
+  const [testPhone, setTestPhone] = useState('');
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      const [camp, logsRes] = await Promise.all([
+      const [camp, logsRes, reportRes] = await Promise.all([
         api<Campaign>(`/campaigns/${id}`),
         api<Paginated<MessageLog>>(`/campaigns/${id}/logs?limit=200`),
+        api<CampaignReport>(`/campaigns/${id}/report`),
       ]);
       setCampaign(camp);
       setLogs(logsRes.items);
+      setReport(reportRes);
       if (camp.estado === 'borrador') {
         api<Preview>(`/campaigns/${id}/preview`).then(setPreview).catch(() => {});
+      }
+      if (isAdmin) {
+        api<CampaignSettings>('/campaigns/settings').then(setSettings).catch(() => {});
       }
     } catch (err) {
       toast.error((err as Error).message);
     }
-  }, [id, toast]);
+  }, [id, isAdmin, toast]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Auto-refresca mientras está en progreso.
   useEffect(() => {
     if (campaign?.estado !== 'en_progreso') return;
     const t = setInterval(load, 2000);
@@ -63,24 +72,51 @@ export function CampaignDetail() {
     }
   };
 
-  const remove = async () => {
-    if (!id || !campaign) return;
-    if (campaign.estado === 'en_progreso') {
-      toast.error('Pausa la campaña antes de eliminarla');
-      return;
-    }
-    if (
-      !confirm(
-        `¿Eliminar la campaña "${campaign.nombre_campana}"? Se borrarán también sus registros de mensajes.`,
-      )
-    ) {
-      return;
-    }
+  const releaseBatch = async () => {
+    if (!id) return;
     setBusy(true);
     try {
-      await api(`/campaigns/${id}`, { method: 'DELETE' });
-      toast.success('Campaña eliminada');
-      navigate('/campaigns');
+      const res = await api<{ procesados: number; pendientes: number }>(`/campaigns/${id}/release`, {
+        method: 'POST',
+        body: {},
+      });
+      toast.success(`Liberados ${res.procesados} mensajes · ${res.pendientes} pendientes`);
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const testSend = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!id || !testPhone.trim()) return;
+    setBusy(true);
+    try {
+      const res = await api<{ message_id: string; message_status: string | null }>(
+        `/campaigns/${id}/test-send`,
+        { method: 'POST', body: { telefono: testPhone.trim() } },
+      );
+      toast.success(`Prueba enviada · ID: ${res.message_id || '—'}`);
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveSettings = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!settings) return;
+    setBusy(true);
+    try {
+      const updated = await api<CampaignSettings>('/campaigns/settings', {
+        method: 'PATCH',
+        body: settings,
+      });
+      setSettings(updated);
+      toast.success('Configuración guardada');
     } catch (err) {
       toast.error((err as Error).message);
     } finally {
@@ -92,6 +128,8 @@ export function CampaignDetail() {
 
   const m = campaign.metricas;
   const pct = (n: number) => (m.total > 0 ? Math.round((n / m.total) * 100) : 0);
+  const pendientes = report?.pendientes ?? 0;
+  const retenidos = report?.retenidos_meta ?? 0;
 
   return (
     <div>
@@ -103,37 +141,140 @@ export function CampaignDetail() {
           <h1 style={{ marginTop: 6 }}>{campaign.nombre_campana}</h1>
           <p>
             Estado: <Badge value={campaign.estado} />
+            {pendientes > 0 && (
+              <span className="muted" style={{ marginLeft: 10 }}>
+                · {pendientes} encolados
+              </span>
+            )}
+            {retenidos > 0 && (
+              <span className="muted" style={{ marginLeft: 10 }}>
+                · {retenidos} retenidos por Meta
+              </span>
+            )}
           </p>
         </div>
-        <div className="head-actions">
+        <div className="row">
           {campaign.estado === 'borrador' && (
             <button className="btn btn-primary" disabled={busy} onClick={() => action('launch')}>
               ➤ Lanzar campaña
             </button>
           )}
           {campaign.estado === 'en_progreso' && (
-            <button className="btn" disabled={busy} onClick={() => action('pause')}>
-              ⏸ Pausar
-            </button>
+            <>
+              <button className="btn" disabled={busy} onClick={() => action('pause')}>
+                ⏸ Pausar
+              </button>
+              {pendientes > 0 && (
+                <button className="btn btn-primary" disabled={busy} onClick={releaseBatch}>
+                  ⚡ Liberar lote ({settings?.release_batch_size ?? 20})
+                </button>
+              )}
+            </>
           )}
           {campaign.estado === 'pausada' && (
             <button className="btn btn-primary" disabled={busy} onClick={() => action('resume')}>
               ▶ Reanudar
             </button>
           )}
-          <button
-            className="btn btn-danger"
-            disabled={busy || campaign.estado === 'en_progreso'}
-            title={
-              campaign.estado === 'en_progreso'
-                ? 'Pausa la campaña antes de eliminar'
-                : undefined
-            }
-            onClick={remove}
-          >
-            Eliminar
-          </button>
         </div>
+      </div>
+
+      {isAdmin && settings && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3>Configuración de envío</h3>
+          <p className="muted" style={{ marginBottom: 12 }}>
+            Controla la velocidad y el tamaño de los lotes manuales. Solo administradores.
+          </p>
+          <form onSubmit={saveSettings} className="row" style={{ flexWrap: 'wrap', gap: 12 }}>
+            <div className="field" style={{ minWidth: 160 }}>
+              <label>Mensajes por segundo</label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={settings.send_rate_per_second}
+                onChange={(e) =>
+                  setSettings({ ...settings, send_rate_per_second: Number(e.target.value) })
+                }
+              />
+            </div>
+            <div className="field" style={{ minWidth: 160 }}>
+              <label>Tamaño de lote manual</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={settings.release_batch_size}
+                onChange={(e) =>
+                  setSettings({ ...settings, release_batch_size: Number(e.target.value) })
+                }
+              />
+            </div>
+            <div className="field" style={{ minWidth: 180 }}>
+              <label>Política Meta (marketing)</label>
+              <select
+                value={settings.product_policy ?? ''}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    product_policy: (e.target.value || null) as CampaignSettings['product_policy'],
+                  })
+                }
+              >
+                <option value="">Por defecto (.env)</option>
+                <option value="CLOUD_API_FALLBACK">CLOUD_API_FALLBACK</option>
+                <option value="STRICT">STRICT</option>
+              </select>
+            </div>
+            <div className="field" style={{ minWidth: 180 }}>
+              <label>Compartir actividad</label>
+              <select
+                value={
+                  settings.message_activity_sharing === null
+                    ? ''
+                    : settings.message_activity_sharing
+                      ? 'true'
+                      : 'false'
+                }
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    message_activity_sharing:
+                      e.target.value === '' ? null : e.target.value === 'true',
+                  })
+                }
+              >
+                <option value="">Por defecto (.env)</option>
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+            <div style={{ alignSelf: 'flex-end' }}>
+              <button className="btn btn-primary" disabled={busy}>
+                Guardar
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3>Probar envío</h3>
+        <p className="muted" style={{ marginBottom: 10 }}>
+          Envía un mensaje de prueba con la plantilla y variables de esta campaña.
+        </p>
+        <form onSubmit={testSend} className="row">
+          <input
+            style={{ flex: 1, maxWidth: 280 }}
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            placeholder="573001234567"
+            required
+          />
+          <button className="btn" disabled={busy}>
+            Enviar prueba
+          </button>
+        </form>
       </div>
 
       {campaign.estado === 'borrador' && preview && (
@@ -142,21 +283,6 @@ export function CampaignDetail() {
           <p>
             Destinatarios estimados: <b>{preview.total_destinatarios}</b>
           </p>
-          {preview.plan_envio && preview.total_destinatarios > 0 && (
-            <div className="muted" style={{ marginBottom: 12 }}>
-              <p>
-                Plan de envío: <b>{preview.plan_envio.tope_diario}</b> mensajes/día durante{' '}
-                <b>{preview.plan_envio.dias_estimados}</b> día
-                {preview.plan_envio.dias_estimados !== 1 ? 's' : ''}
-                {preview.plan_envio.dias_estimados > 1 && (
-                  <>
-                    {' '}
-                    (último día: <b>{preview.plan_envio.mensajes_ultimo_dia}</b>)
-                  </>
-                )}
-              </p>
-            </div>
-          )}
           {preview.banner && (
             <img
               src={preview.banner}
@@ -178,38 +304,9 @@ export function CampaignDetail() {
         </div>
       )}
 
-      {campaign.config_envio?.tope_diario && campaign.estado !== 'borrador' && (
-        <div className="card">
-          <h3>Dosificación</h3>
-          <p className="muted">
-            Tope diario: <b>{campaign.config_envio.tope_diario}</b> · Activados hoy:{' '}
-            <b>{campaign.config_envio.enviados_en_ventana ?? 0}</b>
-            {campaign.metricas.pendientes != null && campaign.metricas.pendientes > 0 && (
-              <>
-                {' '}
-                · Pendientes de liberar: <b>{campaign.metricas.pendientes}</b>
-              </>
-            )}
-            {(campaign.config_envio.intervalo_min_seg != null ||
-              campaign.config_envio.intervalo_max_seg != null) && (
-              <>
-                <br />
-                Intervalo entre mensajes:{' '}
-                <b>
-                  {campaign.config_envio.intervalo_min_seg ?? 1}–
-                  {campaign.config_envio.intervalo_max_seg ?? 10} s
-                </b>{' '}
-                (aleatorio)
-              </>
-            )}
-          </p>
-        </div>
-      )}
-
       <div className="cards">
         {[
           ['Total', m.total],
-          ...(m.pendientes != null && m.pendientes > 0 ? [['Pendientes', m.pendientes] as const] : []),
           ['Enviados', m.enviados],
           ['Entregados', m.entregados],
           ['Leídos', m.leidos],
@@ -235,6 +332,7 @@ export function CampaignDetail() {
               <tr>
                 <th>Teléfono</th>
                 <th>Estado</th>
+                <th>Meta status</th>
                 <th>Message ID</th>
                 <th>Error</th>
               </tr>
@@ -247,14 +345,15 @@ export function CampaignDetail() {
                     <td>
                       <Badge value={l.estado_actual} />
                     </td>
+                    <td className="muted">{l.meta_message_status || '—'}</td>
                     <td className="mono muted">{l.whatsapp_message_id || '—'}</td>
                     <td className="muted">{l.error || '—'}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={4} className="empty">
-                    Aún no hay mensajes. Lanza la campaña.
+                  <td colSpan={5} className="empty">
+                    Aún no hay mensajes. Lanza la campaña o usa «Enviar prueba».
                   </td>
                 </tr>
               )}

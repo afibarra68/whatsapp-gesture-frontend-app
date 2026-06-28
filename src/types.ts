@@ -5,43 +5,12 @@ export interface User {
   nombre: string;
   email: string;
   rol: Role;
-  mfaEnabled?: boolean;
 }
 
-export type LoginResponse =
-  | {
-      requiresMfa: true;
-      mfaToken: string;
-      user: Pick<User, 'id' | 'nombre' | 'email'>;
-    }
-  | {
-      token: string;
-      refreshToken: string;
-      user: User;
-    };
-
-export interface MfaSetupResponse {
-  secret: string;
-  otpauthUrl: string;
-}
-
-export interface MfaStatusResponse {
-  enabled: boolean;
-  available: boolean;
-}
-
-export type UserApprovalStatus = 'pendiente' | 'aprobado' | 'rechazado';
-
-/** Usuario del panel (GET /users) — formato API con _id */
-export interface AppUser {
-  _id: string;
-  nombre: string;
-  email: string;
-  rol: Role;
-  activo: boolean;
-  estado_aprobacion: UserApprovalStatus;
-  ultimo_login: string | null;
-  createdAt: string;
+export interface LoginResponse {
+  token: string;
+  refreshToken: string;
+  user: User;
 }
 
 export interface Client {
@@ -61,24 +30,14 @@ export interface TemplateVariable {
   ejemplo?: string;
 }
 
-export interface TemplateButton {
-  tipo: 'quick_reply' | 'url' | 'phone';
-  texto: string;
-  url?: string | null;
-  telefono?: string | null;
-}
-
 export interface Template {
   _id: string;
   nombre_meta: string;
   idioma: string;
   categoria: 'marketing' | 'utility' | 'authentication';
   estado: 'borrador' | 'pendiente' | 'aprobada' | 'rechazada';
-  header_tipo?: 'none' | 'image' | 'text';
+  header_tipo?: 'none' | 'image';
   header_url?: string | null;
-  header_text?: string | null;
-  footer?: string | null;
-  botones?: TemplateButton[];
   cuerpo: string;
   variables: TemplateVariable[];
 }
@@ -90,24 +49,23 @@ export interface CampaignMetrics {
   entregados: number;
   leidos: number;
   fallidos: number;
-  pendientes?: number;
 }
 
-export interface CampaignPlanEnvio {
-  tope_diario: number;
-  dias_estimados: number;
-  total: number;
-  mensajes_ultimo_dia: number;
+export interface CampaignSettings {
+  send_rate_per_second: number;
+  release_batch_size: number;
+  product_policy: 'CLOUD_API_FALLBACK' | 'STRICT' | null;
+  message_activity_sharing: boolean | null;
+  updated_at: string;
 }
 
-export interface CampaignConfigEnvio {
-  tope_diario?: number;
-  dias_planificados?: number;
-  dias_estimados?: number;
-  ventana_inicio?: string | null;
-  enviados_en_ventana?: number;
-  intervalo_min_seg?: number;
-  intervalo_max_seg?: number;
+export interface CampaignReport {
+  campana: string;
+  estado: Campaign['estado'];
+  metricas: CampaignMetrics;
+  pendientes: number;
+  retenidos_meta: number;
+  porcentajes: Record<string, number>;
 }
 
 export interface Campaign {
@@ -116,7 +74,6 @@ export interface Campaign {
   plantilla_id: string;
   segmento: { etiquetas?: string[]; solo_activos?: boolean };
   mapeo_variables: { indice: number; origen: 'campo' | 'fijo' | 'metadata'; valor: string }[];
-  config_envio?: CampaignConfigEnvio | null;
   estado: 'borrador' | 'en_progreso' | 'pausada' | 'finalizada' | 'error';
   metricas: CampaignMetrics;
   fecha_lanzamiento?: string | null;
@@ -127,6 +84,7 @@ export interface MessageLog {
   _id: string;
   telefono: string;
   whatsapp_message_id: string | null;
+  meta_message_status?: string | null;
   estado_actual: string;
   error?: string | null;
   createdAt: string;
@@ -135,41 +93,10 @@ export interface MessageLog {
 export interface Conversation {
   _id: string;
   telefono: string;
-  cliente_id?: string;
-  cliente_nombre?: string | null;
   modo: 'bot' | 'humano';
   ventana_abierta_hasta: string | null;
   ultimo_mensaje_entrante: string | null;
   ultima_actividad: string;
-  espera_respuesta?: boolean;
-}
-
-export interface ConversationMessage {
-  _id: string;
-  conversation_id: string;
-  direction: 'inbound' | 'outbound';
-  origen: 'cliente' | 'bot' | 'agente' | 'sistema';
-  texto: string;
-  whatsapp_message_id: string | null;
-  estado: 'enviado' | 'entregado' | 'leido' | 'fallido' | null;
-  createdAt: string;
-}
-
-export interface BotRule {
-  _id: string;
-  nombre: string;
-  palabras_clave: string[];
-  respuesta_tipo: 'texto';
-  respuesta: string;
-  activo: boolean;
-  prioridad: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface BotConfig {
-  mensaje_cierre: string;
-  enviar_mensaje_cierre: boolean;
 }
 
 export interface Paginated<T> {
@@ -178,68 +105,4 @@ export interface Paginated<T> {
   page: number;
   limit: number;
   pages?: number;
-}
-
-export interface PersonaCategoria {
-  _id: string;
-  slug: string;
-  nombre: string;
-  descripcion: string | null;
-  color: string | null;
-  activo: boolean;
-  orden: number;
-}
-
-export interface Persona {
-  _id: string;
-  nombre: string;
-  telefono: string;
-  categoria_slug: string;
-  activo: boolean;
-  notas: string | null;
-  metadata: Record<string, unknown>;
-  origen: string | null;
-}
-
-export interface PersonasConfig {
-  default_country_code: string;
-  auto_pago_pendiente: boolean;
-  categoria_pendientes_slug: string;
-  sync_to_clients: boolean;
-  updated_at: string;
-}
-
-export interface PersonaImportResult {
-  insertados: number;
-  actualizados: number;
-  pagosCreados: number;
-  descartados: number;
-  filas_procesadas: number;
-  format: string;
-}
-
-export type PagoEstado = 'pendiente' | 'pagado' | 'cancelado';
-
-export interface Pago {
-  _id: string;
-  persona_id: string;
-  estado: PagoEstado;
-  monto: number | null;
-  moneda: string;
-  concepto: string | null;
-  fecha_vencimiento: string | null;
-  fecha_pago: string | null;
-  referencia: string | null;
-  notas: string | null;
-  persona_nombre: string | null;
-  persona_telefono: string | null;
-  categoria_slug: string | null;
-}
-
-export interface PagoResumen {
-  pendientes: number;
-  pagados: number;
-  cancelados: number;
-  montoPendiente: number;
-  montoPagado: number;
 }

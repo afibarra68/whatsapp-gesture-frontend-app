@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge } from '../components/Badge';
@@ -27,28 +27,6 @@ export function Campaigns() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const remove = async (c: Campaign, e?: MouseEvent) => {
-    e?.stopPropagation();
-    if (c.estado === 'en_progreso') {
-      toast.error('Pausa la campaña antes de eliminarla');
-      return;
-    }
-    if (
-      !confirm(
-        `¿Eliminar la campaña "${c.nombre_campana}"? Se borrarán también sus registros de mensajes.`,
-      )
-    ) {
-      return;
-    }
-    try {
-      await api(`/campaigns/${c._id}`, { method: 'DELETE' });
-      toast.success('Campaña eliminada');
-      load();
-    } catch (err) {
-      toast.error((err as Error).message);
-    }
-  };
 
   return (
     <div>
@@ -93,22 +71,8 @@ export function Campaigns() {
                   <td>{c.metricas?.enviados ?? 0}</td>
                   <td>{c.metricas?.entregados ?? 0}</td>
                   <td>{c.metricas?.fallidos ?? 0}</td>
-                  <td style={{ whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
-                    <button className="btn btn-sm" onClick={() => navigate(`/campaigns/${c._id}`)}>
-                      Ver
-                    </button>{' '}
-                    <button
-                      className="btn btn-sm btn-danger"
-                      disabled={c.estado === 'en_progreso'}
-                      title={
-                        c.estado === 'en_progreso'
-                          ? 'Pausa la campaña antes de eliminar'
-                          : undefined
-                      }
-                      onClick={(e) => remove(c, e)}
-                    >
-                      Eliminar
-                    </button>
+                  <td>
+                    <button className="btn btn-sm">Ver</button>
                   </td>
                 </tr>
               ))
@@ -148,10 +112,6 @@ function NewCampaignModal({
   const [nombre, setNombre] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [etiquetas, setEtiquetas] = useState('');
-  const [diasPlanificados, setDiasPlanificados] = useState('7');
-  const [topeDiario, setTopeDiario] = useState('');
-  const [intervaloMin, setIntervaloMin] = useState('1');
-  const [intervaloMax, setIntervaloMax] = useState('10');
   const [mapeo, setMapeo] = useState<{ origen: string; valor: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -178,22 +138,6 @@ function NewCampaignModal({
     e.preventDefault();
     setSaving(true);
     try {
-      const configEnvio: {
-        tope_diario?: number;
-        dias_planificados?: number;
-        intervalo_min_seg?: number;
-        intervalo_max_seg?: number;
-      } = {};
-      if (topeDiario.trim()) {
-        configEnvio.tope_diario = Number(topeDiario);
-      } else if (diasPlanificados.trim()) {
-        configEnvio.dias_planificados = Number(diasPlanificados);
-      }
-      const minSeg = Math.min(10, Math.max(1, Number(intervaloMin) || 1));
-      const maxSeg = Math.min(10, Math.max(1, Number(intervaloMax) || 10));
-      configEnvio.intervalo_min_seg = Math.min(minSeg, maxSeg);
-      configEnvio.intervalo_max_seg = Math.max(minSeg, maxSeg);
-
       const res = await api<Campaign>('/campaigns', {
         method: 'POST',
         body: {
@@ -210,7 +154,6 @@ function NewCampaignModal({
             origen: m.origen,
             valor: m.valor,
           })),
-          ...(Object.keys(configEnvio).length > 0 ? { config_envio: configEnvio } : {}),
         },
       });
       toast.success('Campaña creada');
@@ -247,71 +190,6 @@ function NewCampaignModal({
             onChange={(e) => setEtiquetas(e.target.value)}
             placeholder="cali, premium"
           />
-        </div>
-
-        <div className="field">
-          <label>Dosificación diaria</label>
-          <p className="muted" style={{ fontSize: 13, margin: '4px 0 8px' }}>
-            El sistema calcula un tope por día y reparte los envíos en ventanas de 24 h.
-          </p>
-          <div className="row" style={{ gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12 }}>Días planificados</label>
-              <input
-                type="number"
-                min={1}
-                value={diasPlanificados}
-                onChange={(e) => {
-                  setDiasPlanificados(e.target.value);
-                  setTopeDiario('');
-                }}
-                placeholder="7"
-                disabled={!!topeDiario.trim()}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12 }}>O tope diario fijo</label>
-              <input
-                type="number"
-                min={1}
-                value={topeDiario}
-                onChange={(e) => {
-                  setTopeDiario(e.target.value);
-                  if (e.target.value.trim()) setDiasPlanificados('');
-                }}
-                placeholder="ej. 500"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="field">
-          <label>Intervalo entre mensajes (segundos)</label>
-          <p className="muted" style={{ fontSize: 13, margin: '4px 0 8px' }}>
-            Pausa aleatoria entre cada envío dentro de la campaña (1–10 s).
-          </p>
-          <div className="row" style={{ gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12 }}>Mínimo</label>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={intervaloMin}
-                onChange={(e) => setIntervaloMin(e.target.value)}
-              />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: 12 }}>Máximo</label>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={intervaloMax}
-                onChange={(e) => setIntervaloMax(e.target.value)}
-              />
-            </div>
-          </div>
         </div>
 
         {mapeo.length > 0 && (

@@ -48,11 +48,38 @@ export function Help() {
       </div>
 
       <div className="card">
-        <h3>Estados de entrega de mensajes</h3>
-        <p className="muted">
-          Cada mensaje enviado tiene un identificador único (<span className="mono">wamid</span>) que
-          puedes ver en el registro de una campaña. Los estados avanzan en orden: encolado → enviado →
-          entregado → leído (o fallido). Nunca retroceden.
+        <h3>El Simulador tiene dos cajas distintas</h3>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Caja</th>
+                <th>Para qué</th>
+                <th>Qué va en el campo</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Simular estado de entrega</td>
+                <td>Marcar un mensaje enviado como entregado/leído/fallido</td>
+                <td>
+                  El <b>wamid</b> (no un teléfono). Cópialo del registro de mensajes de una campaña:
+                  <span className="mono"> wamid.SIM.573001000001.A1B2…</span>
+                </td>
+              </tr>
+              <tr>
+                <td>Simular mensaje entrante (bot)</td>
+                <td>Simular que un cliente te escribe</td>
+                <td>
+                  El <b>teléfono</b> de un cliente que exista:{' '}
+                  <span className="mono">573001000001</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ marginTop: 12 }}>
+          El estado solo avanza (encolado → enviado → entregado → leído / fallido); nunca retrocede.
         </p>
       </div>
 
@@ -141,8 +168,8 @@ export function Help() {
         <p className="muted">
           <b>¿Por qué no se envió a todos?</b> Solo se envía a clientes activos y con opt-in.
           <br />
-          <b>¿El estado de un mensaje no cambia?</b> Los estados no retroceden; si ya estaba
-          aplicado, no hay cambio visible.
+          <b>¿“Sin cambios” en el simulador de estado?</b> Ese estado ya estaba aplicado o sería un
+          retroceso (es idempotente).
           <br />
           <b>¿El bot ignoró mi mensaje?</b> El teléfono no está registrado como cliente.
           <br />

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
 type ToastType = 'success' | 'error' | 'info';
 interface Toast {
@@ -24,13 +24,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
   }, []);
 
-  const success = useCallback((m: string) => show(m, 'success'), [show]);
-  const error = useCallback((m: string) => show(m, 'error'), [show]);
-
-  const api = useMemo<ToastApi>(
-    () => ({ show, success, error }),
-    [show, success, error],
-  );
+  const api: ToastApi = {
+    show,
+    success: (m) => show(m, 'success'),
+    error: (m) => show(m, 'error'),
+  };
 
   return (
     <ToastContext.Provider value={api}>

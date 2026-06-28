@@ -1,50 +1,26 @@
-import { FormEvent, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { FormEvent, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useToast } from '../components/Toast';
-import { appConfig, configErrors, isAppConfigReady } from '../config';
-
-type Step = 'credentials' | 'mfa';
+import { EVENT } from '../config';
 
 export function Login() {
-  const { login, verifyMfa, user, loading: authLoading } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [step, setStep] = useState<Step>('credentials');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [mfaToken, setMfaToken] = useState('');
-  const [mfaUserName, setMfaUserName] = useState('');
-  const [code, setCode] = useState('');
+  const [email, setEmail] = useState('admin@local.test');
+  const [password, setPassword] = useState('Cambiar.Esto.123');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      navigate('/', { replace: true });
-    }
-  }, [authLoading, user, navigate]);
+  if (user) {
+    navigate('/', { replace: true });
+  }
 
-  const submitCredentials = async (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isAppConfigReady) return;
-
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !password) {
-      toast.error('Ingresa correo y contraseña');
-      return;
-    }
-
     setLoading(true);
     try {
-      const res = await login(normalizedEmail, password);
-      if ('requiresMfa' in res && res.requiresMfa) {
-        setMfaToken(res.mfaToken);
-        setMfaUserName(res.user.nombre);
-        setCode('');
-        setStep('mfa');
-        toast.success('Contraseña correcta. Ingresa el código 2FA.');
-        return;
-      }
+      await login(email, password);
       toast.success('Bienvenido');
       navigate('/', { replace: true });
     } catch (err) {
@@ -54,143 +30,41 @@ export function Login() {
     }
   };
 
-  const submitMfa = async (e: FormEvent) => {
-    e.preventDefault();
-    const trimmed = code.replace(/\s/g, '');
-    if (trimmed.length < 6) {
-      toast.error('Ingresa el código de 6 dígitos');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await verifyMfa(mfaToken, trimmed);
-      toast.success('Bienvenido');
-      navigate('/', { replace: true });
-    } catch (err) {
-      toast.error((err as Error).message || 'Código 2FA incorrecto');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const backToCredentials = () => {
-    setStep('credentials');
-    setMfaToken('');
-    setCode('');
-    setPassword('');
-  };
-
-  if (authLoading) {
-    return <div className="center-screen">Cargando…</div>;
-  }
-
-  const { branding } = appConfig;
-
   return (
     <div className="login-screen">
-      <form
-        className="login-card"
-        onSubmit={step === 'mfa' ? submitMfa : submitCredentials}
-        noValidate
-      >
+      <form className="login-card" onSubmit={submit}>
         <div className="login-logo">
-          <span className="dot">{branding.short}</span> {branding.name}
+          <span className="dot">{EVENT.short}</span> {EVENT.name}
         </div>
-        <p className="muted login-tagline">
-          {step === 'mfa'
-            ? `Verificación en dos pasos · ${mfaUserName}`
-            : branding.tagline}
+        <p className="muted" style={{ marginTop: -12, marginBottom: 20, fontSize: 13 }}>
+          {EVENT.tagline}
         </p>
-
-        {!isAppConfigReady && (
-          <div className="login-config-error" role="alert">
-            <strong>Configuración incompleta</strong>
-            <ul>
-              {configErrors.map((issue) => (
-                <li key={issue.field}>
-                  <span className="mono">{issue.field}</span>: {issue.message}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {step === 'credentials' ? (
-          <>
-            <div className="field">
-              <label htmlFor="login-email">Correo</label>
-              <input
-                id="login-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username"
-                autoFocus
-                required
-                disabled={!isAppConfigReady || loading}
-                placeholder="tu@correo.com"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="login-password">Contraseña</label>
-              <input
-                id="login-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-                disabled={!isAppConfigReady || loading}
-              />
-            </div>
-            <button
-              className="btn btn-primary btn-block"
-              type="submit"
-              disabled={!isAppConfigReady || loading}
-            >
-              {loading ? 'Entrando…' : 'Iniciar sesión'}
-            </button>
-            <p className="muted" style={{ marginTop: 16, fontSize: 13, textAlign: 'center' }}>
-              ¿No tienes cuenta? <Link to="/register">Regístrate</Link>
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="field">
-              <label htmlFor="login-mfa">Código de autenticador</label>
-              <input
-                id="login-mfa"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                autoFocus
-                required
-                disabled={loading}
-                className="mono"
-                style={{ letterSpacing: '0.25em', fontSize: '1.25rem', textAlign: 'center' }}
-              />
-              <small className="muted">
-                Abre Google Authenticator, Microsoft Authenticator o Authy.
-              </small>
-            </div>
-            <button className="btn btn-primary btn-block" type="submit" disabled={loading}>
-              {loading ? 'Verificando…' : 'Confirmar código'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-block"
-              style={{ marginTop: 8 }}
-              onClick={backToCredentials}
-              disabled={loading}
-            >
-              Volver
-            </button>
-          </>
-        )}
+        <div className="field">
+          <label>Correo</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
+            required
+          />
+        </div>
+        <div className="field">
+          <label>Contraseña</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </div>
+        <button className="btn btn-primary btn-block" disabled={loading}>
+          {loading ? 'Entrando…' : 'Iniciar sesión'}
+        </button>
+        <p className="muted" style={{ marginTop: 16, fontSize: 12 }}>
+          Usuario base por defecto precargado para pruebas.
+        </p>
       </form>
     </div>
   );

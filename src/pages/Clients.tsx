@@ -209,7 +209,7 @@ function ImportCsvModal({ onClose, onDone }: { onClose: () => void; onDone: () =
         toast.error('No se pudo leer el archivo CSV');
       }
     };
-    reader.readAsText(file, 'UTF-8');
+    reader.readAsText(file);
   };
 
   const importar = async () => {

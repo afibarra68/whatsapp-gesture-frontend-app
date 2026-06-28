@@ -4,13 +4,12 @@ interface ModalProps {
   title: string;
   onClose: () => void;
   children: ReactNode;
-  wide?: boolean;
 }
 
-export function Modal({ title, onClose, children, wide }: ModalProps) {
+export function Modal({ title, onClose, children }: ModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className={`modal${wide ? ' modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3>{title}</h3>
         {children}
       </div>
